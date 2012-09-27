@@ -34,4 +34,4 @@ You'll then see a prompt:
 
     >
 	
-Start typing a mathematical expression and hit enter to evaluate it. To close the REPL type ```ruby exit```.
+Start typing a mathematical expression and hit enter to evaluate it. To close the REPL type ```exit```.
