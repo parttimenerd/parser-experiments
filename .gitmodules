@@ -1,0 +1,3 @@
+[submodule "tiny-bf"]
+	path = tiny-bf
+	url = https://github.com/parttimenerd/tiny-bf.git
