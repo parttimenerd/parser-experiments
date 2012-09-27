@@ -36,10 +36,15 @@ module MathParser
 				},
 				:number => {
 					:value => /[0-9]+(\.[0-9]*)?$/,
-					:leaf_action => lambda {|this| this.value.to_f},
-					:left_leaf_action => lambda {|a| a.eval},
-					:right_leaf_action => lambda {|a| a.eval},
-					:both_leafs_action => lambda {|a, b| a.eval + b.eval}
+					:leaf_action => lambda {|this| this.value.to_f}
+				},
+				:pi => {
+					:value => "PI",
+					:leaf_action => lambda {|this| Math::PI}
+				},
+				:e => {
+					:value => "E",
+					:leaf_action => lambda {|this| Math::E}
 				},
 				:lbracket => {
 					:value => "("
