@@ -1,6 +1,6 @@
 #math-parser
 
-A simple parser for simple arythmetic expressions like ```ruby 4 * (4! + 4)```.
+A simple parser for simple arythmetic expressions like ```ruby 4 * (4! + 4) ^ 2```.
 
 See the math-parser.rb file for implementation details.
 
@@ -17,9 +17,9 @@ lex.parseLexerTokens.print
 #output eval output
 puts lex.start_token.eval true
 ```
-##normal usage
+###Normal usage
 ```ruby
-puts MathParser.eval "3!"
+result = MathParser.eval "3!"
 ```
 
 ## REPL usage
