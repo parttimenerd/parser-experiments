@@ -29,9 +29,9 @@ class SimpleJavaParser < Parslet::Parser
 	rule(:visibility) { str('public') | str('private') | str('protected') }
 	#keywords used in method and variable definitions like 'volatile' and 'transient'
 	rule(:var_and_method_keywords){
-		((str('volatile') | str('transient') |
-		   str('synchronized') | str('abstract') |
-		   str('final')).as(:prop) >> space?         ).repeat(0)
+		((str('volatile').as(:volatile) | str('transient').as(:transient) |
+		   str('synchronized').as(:synchronized) | str('abstract').as(:abstract) |
+		   str('final').as(:final)) >> space?  ).repeat  
 	}
 	#single line comment
 	rule(:single_comment) {space? >> str('//') >> (str("\n").absent? >> any).repeat}
@@ -76,7 +76,7 @@ class SimpleJavaParser < Parslet::Parser
 	
 	#Class and interface definition with (maybe) leading comment and (probably) a visibility keyword and some other keywords
 	rule(:class_r) {
-		((long_comment.as(:comment) >> lbr?).maybe >> (visibility.as(:visibility) >> space).maybe >> (var_and_method_keywords.as(:prop) >> space).repeat.as(:props) >> class_wo_comment).as(:class_or_interface)
+		((long_comment.as(:comment) >> lbr?).maybe >> (visibility.as(:visibility) >> space).maybe >> var_and_method_keywords >> class_wo_comment).as(:class_or_interface)
 	}
 	#Class and interface definition without a leading comment and leading keywords
 	rule(:class_wo_comment) {
@@ -92,7 +92,7 @@ class SimpleJavaParser < Parslet::Parser
 	
 	#variable definition, e.g. 'public static void main'
 	rule(:var_def_start) {
-		(visibility.as(:visibility) >> space).maybe >> (str('static').as(:static) >> space).maybe >> var_and_method_keywords.as(:props) >> space? >> type.as(:type) >> space? >>id.as(:name)
+		(visibility.as(:visibility) >> space).maybe >> (str('static').as(:static) >> space).maybe >> var_and_method_keywords >> space? >> type.as(:type) >> space? >>id.as(:name)
 	}
 	#comment? and annotation?
 	rule(:def_pre) { (space? >> long_comment.as(:comment).maybe >> annotations? >> lbr?).maybe >> space? }
@@ -112,13 +112,13 @@ class SimpleJavaParser < Parslet::Parser
 		(str('(') >> space? >> (method_arg.as(:argument) >> (comma >> method_arg.as(:argument)).repeat(0)).as(:arguments).maybe >> space? >> str(')'))
 	}
 	rule(:method_arg) {
-		space >> (str('static').as(:static) >> space).maybe >> var_and_method_keywords.as(:props) >> space? >> type.as(:type) >> space? >> id.as(:name)
+		space >> (str('static').as(:static) >> space).maybe >> var_and_method_keywords >> space? >> type.as(:type) >> space? >> id.as(:name)
 	}
 	rule(:throws) {
 		space? >> str('throws') >> space >> (type >> (comma >> type).repeat).as(:throws) >> space?
 	}
 	rule(:inner_class) {
-		space? >> (def_pre >> (visibility.as(:visibility) >> space).maybe >> (str('static').as(:static) >> space).maybe >> var_and_method_keywords.as(:props) >> space? >> class_wo_comment).as(:inner_class)
+		space? >> (def_pre >> (visibility.as(:visibility) >> space).maybe >> (str('static').as(:static) >> space).maybe >> var_and_method_keywords >> space? >> class_wo_comment).as(:inner_class)
 	}
 	rule(:annotations?) { annotation.repeat.as(:annotations) }
 	rule(:annotation) {

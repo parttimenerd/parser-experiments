@@ -24,10 +24,10 @@ package abc;
 import javax.*;
 import static otherpackage.SomeClass.*;
 
-/** 
-* This is my wonderful useless class...
+/**
+* This is my wonderfully useless class...
 **/
-class WonderfulClass {
+class WonderfulClass extends TestInnerClass implements ABC {
 	
 	private static String helloMsg = "Hello...";
 	
@@ -48,43 +48,46 @@ becomes to
 {:package=>"abc"@8,
  :imports=>
   [{:import=>"javax.*"@21}, {:import_static=>"otherpackage.SomeClass.*"@44}],
- :class=>
-  [{:comment=>{:text=>" \n* This is my wonderful useless class...\n"@74},
-    :props=>[]},
-   {:name=>"WonderfulClass"@126},
-   {:variable_definition=>
-     {:annotations=>[],
-      :visibility=>"private"@146,
-      :static=>"static"@154,
-      :props=>[],
-      :type=>"String"@161,
-      :name=>"helloMsg"@168,
-      :value=>{:string=>"Hello..."@180}}},
-   {:method_definition=>
-     {:annotations=>
-       [{:annotation=>
-          {:name=>"Remove"@195,
-           :arguments=>
-            {:argument=>{:value=>{:string=>"has an endless loop"@209}}}}}],
-      :static=>"static"@232,
-      :props=>[],
-      :type=>"String"@239,
-      :name=>"getHelloMsg"@246,
-      :method_body=>
-       "\t\tSystem.out.println(helloMsg);\n\t\tfor (int i = 1; i++; i > 0){}\n\t"@261}},
-   {:inner_class=>
-     [{:comment=>{:text=>" An inner class... Yeah... "@334},
-       :annotations=>[],
-       :visibility=>"public"@366,
-       :props=>[{:prop=>"abstract"@373}]},
-      {:name=>"TestInnerClass"@388},
-      {:method_definition=>
-        {:annotations=>[],
-         :visibility=>"private"@407,
-         :props=>[{:prop=>"abstract"@415}],
-         :type=>"void"@424,
-         :name=>"hhm"@429,
-         :none=>";"@434}}]}]}
+ :class_or_interface=>
+  {:comment=>
+    {:text=>[{:text_line=>"This is my wonderful useless class..."@77}]},
+   :class=>
+    [{:name=>"WonderfulClass"@125,
+      :extends=>{:classes=>{:class=>"TestInnerClass"@148}},
+      :implements=>{:classes=>{:class=>"ABC"@174}}},
+     {:variable_definition=>
+       {:annotations=>[],
+        :visibility=>"private"@183,
+        :static=>"static"@191,
+        :type=>"String"@198,
+        :name=>"helloMsg"@205,
+        :value=>{:string=>"Hello..."@217}}},
+     {:method_definition=>
+       {:annotations=>
+         [{:annotation=>
+            {:name=>"Remove"@232,
+             :arguments=>
+              {:argument=>{:value=>{:string=>"has an endless loop"@246}}}}}],
+        :static=>"static"@269,
+        :type=>"String"@276,
+        :name=>"getHelloMsg"@283,
+        :method_body=>
+         "\t\tSystem.out.println(helloMsg);\n\t\tfor (int i = 1; i++; i > 0){}\n\t"@298}},
+     {:inner_class=>
+       [{:comment=>{:text=>[{:text_line=>"An inner class... Yeah..."@372}]},
+         :annotations=>[],
+         :visibility=>"public"@403},
+        {:abstract=>"abstract"@410},
+        {:final=>"final"@419},
+        {:class=>
+          [{:name=>"TestInnerClass"@431},
+           {:method_definition=>
+             [{:annotations=>[]},
+              {:visibility=>"private"@450},
+              {:abstract=>"abstract"@458},
+              {:type=>"void"@467},
+              {:name=>"hhm"@472},
+              {:none=>";"@477}]}]}]}]}}
 ```
 
 TODO

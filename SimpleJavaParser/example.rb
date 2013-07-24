@@ -21,7 +21,7 @@ class WonderfulClass extends TestInnerClass implements ABC {
 	}
 	
 	/** An inner class... Yeah... **/
-	public abstract class TestInnerClass {
+	public abstract final class TestInnerClass {
 		private abstract void hhm();
 	}
 }
