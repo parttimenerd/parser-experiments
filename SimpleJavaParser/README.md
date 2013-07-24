@@ -15,6 +15,10 @@ There are tons of other parser generators and peg parsers out there, so why do I
 - I like ruby
 - I like the idea of Parslet using only pure ruby to describe the grammar
 
+Usage
+----------------
+Check out the examples.rb file, to see how you can use the parser.
+
 
 Example
 ----------------
@@ -50,7 +54,7 @@ becomes to
   [{:import=>"javax.*"@21}, {:import_static=>"otherpackage.SomeClass.*"@44}],
  :class_or_interface=>
   {:comment=>
-    {:text=>[{:text_line=>"This is my wonderful useless class..."@77}]},
+    {:text=>[{:text_line=>"This is my wonderfully useless class..."@77}]},
    :class=>
     [{:name=>"WonderfulClass"@125,
       :extends=>{:classes=>{:class=>"TestInnerClass"@148}},
