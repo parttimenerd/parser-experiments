@@ -1,88 +1,144 @@
+ /* Simple JavaScript Inheritance
+  * By John Resig http://ejohn.org/
+  * MIT Licensed.
+  */
+  // Inspired by base2 and Prototype
+  (function(){
+      var initializing = false, fnTest = /xyz/.test(function(){xyz;}) ? /\b_super\b/ : /.*/;
+     
+      // The base Class implementation (does nothing)
+      this.Class = function(){};
+     
+      // Create a new Class that inherits from this class
+      Class.extend = function(prop) {
+        var _super = this.prototype;
+       
+        // Instantiate a base class (but only create the instance,
+        // don't run the init constructor)
+        initializing = true;
+        var prototype = new this();
+        initializing = false;
+       
+        // Copy the properties over onto the new prototype
+        for (var name in prop) {
+          // Check if we're overwriting an existing function
+          prototype[name] = typeof prop[name] == "function" &&
+            typeof _super[name] == "function" && fnTest.test(prop[name]) ?
+            (function(name, fn){
+              return function() {
+                var tmp = this._super;
+               
+                // Add a new ._super() method that is the same method
+                // but on the super-class
+                this._super = _super[name];
+               
+                // The method only need to be bound temporarily, so we
+                // remove it when we're done executing
+                var ret = fn.apply(this, arguments);        
+                this._super = tmp;
+               
+                return ret;
+              };
+            })(name, prop[name]) :
+            prop[name];
+        }
+       
+        // The dummy class constructor
+        function Class() {
+          // All construction is actually done in the init method
+          if ( !initializing && this.init )
+            this.init.apply(this, arguments);
+        }
+       
+        // Populate our constructed prototype object
+        Class.prototype = prototype;
+       
+        // Enforce the constructor to be what we expect
+        Class.prototype.constructor = Class;
+     
+        // And make this class extendable
+        Class.extend = arguments.callee;
+       
+        return Class;
+      };
+    })();
+
+
 
 function Parser(){
   
   this.p = function(str){
-    /*if (str instanceof Array){
-      return str.map(function(ele){
-        return p(ele);
-      });
-    }*/
     if (!(str instanceof Rule)){
-      rule = new Rule(arguments);
-      rule.match = Rule.simpleMatch;
+      rule = new SimpleRule();
+      rule.init(Array.prototype.slice.call(arguments));
       return rule;
     }
     return str;
   };
   
   this.combine = function(){
-    rule = new Rule(arguments);
-    rule.match = Rule.combineMatch;
+    rule = new CombineRule();
+    rule.init(arguments);
     return rule;
   };
   
-  this.any = function(){
-    rule = new Rule(arguments);
-    rule.match = Rule.anyMatch;
+  this.fork = function(){
+    rule = new ForkRule();
+    rule.init(arguments);
     return rule;
   };
   
-  this.combine = function(){
-    rule = new Rule(arguments);
-    rule.match = Rule.forkMatch;
-    return rule;
-  };
+  this.start = new Rule("");
   
+  this.parse = function(str){
+    var input = new Input(str);
+    return this.start.match(input);
+  }
 }
 
-function Rule(_args){
-  var on_function;
-  var as_str;
-  this.subRules = null;
-  if (_args instanceof Array){
-    this.subRules = _args;
-  } else {
-    this.subRules = arguments;
+Rule = Class.extend({
+  on_function: null,
+  as_str: null,
+  subRules: [],
+  init: function(rules){
+      if (rules instanceof Array){
+        this.subRules = rules;
+      } else {
+        this.subRules[0] = rules;
+      }
+  },
+  match: function(input){
+      throw "Not yet implemented";
   }
-  this.match = function(input){
-    
-  };
-  this.simpleMatch = function(input){
-    result = new Result();
-    for (i = 0; i < this.subRules.length; i++){
-      var curRule = this.subRules[i];
-      var got = "";
-      var match = true;
-      if (curRule instanceof RegExp){
-        got = input.get();
-        match = curRule.exec(got) !== null;
-      } else {
-        curRule = curRule.toString();
-        got = input.getString(curRule.length);
-        match = curRule == got;
-      }
-      if (match){
-        result.add(got);
-      } else {
-        throw new ParseException(got, curRule, input);
-      }
+});
+
+SimpleRule = Rule.extend({
+    match: function(input){
+        result = new Result();
+        for (i = 0; i < this.subRules.length; i++){
+          var curRule = this.subRules[i];
+          var got = "";
+          var match = true;
+          if (curRule instanceof RegExp){
+            got = input.get();
+            match = curRule.exec(got) !== null;
+          } else {
+            curRule = curRule.toString();
+            got = input.getString(curRule.length);
+            match = curRule == got;
+          }
+          if (match){
+            result.add(got);
+          } else {
+            throw new ParseException(got, curRule, input);
+          }
+        }
+        return result;
     }
-    return result;
-  };
-  
-  this.combineMatch = function(input){
-     var result = new Result();
-     for (i = 0; i < this.subRules.length; i++){
-       result.add(this.subRules[i].match(input));
-     }
-     return result;
-  };
+});
 
-  this.anyMatch = function(input){
-    //implement
-  };
-
-  this.forkMatch = function(input){
+ForkRule = Rule.extend({
+    match: function(input){
      var indexBefore = input.index();
      var lastException = null;
      for (i = 0; i < this.subRules.length; i++){
@@ -100,8 +156,18 @@ function Rule(_args){
      } else {
        throw lastException;
      }
-  };
-}
+  }
+});
+
+CombineRule = Rule.extend({
+  match: function(input){
+     var result = new Result();
+     for (i = 0; i < this.subRules.length; i++){
+       result.add(this.subRules[i].match(input));
+     }
+     return result;
+  }
+});
   
 function Result(){
   this.matchedStrs = []; 
@@ -149,14 +215,6 @@ function Input(string){
      return str;
   };
   
-  /*this.incr = function(){
-    if (arguments.length == 1){
-      this.index += arguments[0];
-    } else {
-      this.index++;
-    }
-  };*/
-  
   this.rewind = function(_index){
     index = _index;
     this.updateLineColumnNumber();
@@ -197,3 +255,9 @@ function ParseException(got, expected, input){
   };
 }
 
+//Usage
+parser = new Parser();
+with(parser){
+    start = p("str");
+}
+console.log(parser.parse("str") + "");
