@@ -63,92 +63,266 @@
       };
     })();
 
-
-
 function Parser(){
   
-  this.p = function(str){
-    if (!(str instanceof Rule)){
-      rule = new SimpleRule();
-      rule.init(Array.prototype.slice.call(arguments));
-      return rule;
+  this.p = function(obj){
+    if (arguments.length === 1){
+      return Rule.ruleByObj(obj);
+    } else {
+      return Rule.ruleByObj(Array.prototype.slice.call(arguments));
     }
-    return str;
   };
   
-  this.combine = function(){
-    rule = new CombineRule();
-    rule.init(arguments);
-    return rule;
-  };
+  this.combine = this.p;
   
   this.fork = function(){
-    rule = new ForkRule();
-    rule.init(arguments);
+    var rule = new ForkRule(Array.prototype.slice.call(arguments));
     return rule;
   };
+  
+  this.range = function(obj, min, max){
+    var rule = new RangeRule(Rule.ruleByObj(obj), min, max);
+    return rule;
+  };
+  
+  this.any = function(obj){
+    return this.range(obj, 0, -1);
+  }
+  
+  this.some = function(obj){
+    return this.range(obj, 1, -1);
+  }
+  
+  this.wo = function(obj){
+    var rule = new WithoutRule(Rule.ruleByObj(obj));
+    return rule;
+  }
   
   this.start = new Rule("");
   
   this.parse = function(str){
     var input = new Input(str);
-    return this.start.match(input);
-  }
+    var result = this.start.match(input);
+    if (!input.finished()){
+        //throw "failed to parser the whole string";
+    }
+    return result;
+  };
 }
 
 Rule = Class.extend({
   on_function: null,
   as_str: null,
-  subRules: [],
-  init: function(rules){
-      if (rules instanceof Array){
-        this.subRules = rules;
-      } else {
-        this.subRules[0] = rules;
-      }
-  },
+  data: null,
   match: function(input){
       throw "Not yet implemented";
   }
 });
 
+Rule.ruleByObj = function(obj){
+    var rule = null;
+    if (obj instanceof Rule){
+      return obj;
+    } else if (typeof obj === "string" || typeof obj === "number"){
+      rule = new StringRule();
+      rule.init(obj);
+      return rule;
+    } else if (obj instanceof RegExp){
+      rule = new RegExpRule();
+      rule.init(obj);
+      return rule;
+    } else if (obj instanceof Array){
+      if (obj.length === 1){
+        return Rule.ruleByObj(obj[0]);
+      } else {
+        rule = new CombineRule(obj.map(function(rule) {
+            return Rule.ruleByObj(rule); 
+        }));
+        return rule;
+      }
+    }
+  throw "can't create rule out of '" + obj.toSource() + "'";
+};
+
 SimpleRule = Rule.extend({
+    init: function(rule){
+      if (rule instanceof Array){
+        this.data = Rule.ruleByObj(rule);
+      } else {
+        this.data = rule;
+      }
+  },
     match: function(input){
-        result = new Result();
-        for (i = 0; i < this.subRules.length; i++){
-          var curRule = this.subRules[i];
+        var result = new Result();        
+          var res = this._match(input);
+          if (res.match){
+            result.add(res.got);
+          } else {
+            throw new ParseException(res.got, res.expected, input);
+          }
+        return result;
+    },
+  _match: function(input){
+  return {got: "", expected: "", match: false};
+  }
+});
+
+RegExpRule = SimpleRule.extend({
+  _match: function(input){
+        var curRule = this.data;
           var got = "";
           var match = true;
-          if (curRule instanceof RegExp){
             got = input.get();
             match = curRule.exec(got) !== null;
-          } else {
-            curRule = curRule.toString();
-            got = input.getString(curRule.length);
-            match = curRule == got;
-          }
-          if (match){
-            result.add(got);
-          } else {
-            throw new ParseException(got, curRule, input);
-          }
+            if (match){
+              do {
+                got += input.get();
+                match = curRule.exec(got) !== null;
+              } while(match);
+              input.rewind(input.index() - 1);
+              got = got.substring(0, got.length - 1);
+              match = true;
+            }
+    return {got: got, expected: curRule + "", match: match};
+  }
+});
+  
+StringRule = SimpleRule.extend({
+  _match: function(input){
+    var curRule = this.data + "";
+        var    got = input.getString(curRule.length);
+        var    match = curRule == got;
+      return {got: got, expected: curRule, match: match};
+  }
+});
+
+WithoutRule = Rule.extend({
+    init: function(obj){
+        this.data = Rule.ruleByObj(obj);
+    },
+  match: function(input){
+    var startIndex = input.index();
+    var length = 0;
+    var result = new Result();
+    var matchOnce = true;
+    var match = true;
+    var indexBefore = input.index();
+    while ((!match || matchOnce == true) && !input.finished()){
+    try {
+      indexBefore = input.index();
+      result = this.data.match(input);
+      input.rewind(indexBefore);
+    } catch (e){
+      if (e instanceof ParseException){
+        if (match === true && matchOnce == true){
+          matchOnce = false;
+        }
+        match = false;
+        input.rewind(indexBefore + 1);
+        length += 1;
+      } else {
+        throw e;
+      }
+     }
+    }
+    if (!matchOnce){
+        result = new Result();
+        result.add(input.getString(startIndex, length));
+        return result;
+    } else {
+        throw new ParseException(result.toString(), "<not '" + result.toString() + "'>", input);
+    }
+  }
+});
+
+RangeRule = Rule.extend({
+    min: 0,
+    max: -1,
+    init: function(rules, min, max){
+        this.data = Rule.ruleByObj(rules);
+        this.min = min !== undefined ? min : 0;
+        this.max = max !== undefined ? max : -1;
+    },
+    match: function(input){
+        var result = new Result();
+        for (var i = 0; i < this.min; i++){
+            try {
+            var res = this.data.match(input);
+            } catch (e){
+                console.info("failed in iteration " + (i + 1) + " of " + this.min);
+                throw e;
+            }
+            result.add(res);
+        }
+        var lastIndex = input.index();
+        var lastMatched = false;
+        if (this.max == -1){
+            while (true){
+                try {
+                    lastIndex = input.index();
+                    var res = this.data.match(input);
+                    //console.error(res.toSource());
+                    result.add(res);
+                    lastMatched = true;
+                } catch (e){
+                    break;
+                }
+            }
+        } else {
+            for (var i = this.min; i < this.max && !input.finished(); i++){
+                try {
+                    lastIndex = input.index();
+                    result.add(this.data.match(input));
+                    lastMatched = true;
+                } catch (e){
+                    break;
+                }
+            }
+        }
+        //console.error(input.index(), lastIndex, result.toSource());
+        if (!lastMatched){
+            input.rewind(lastIndex);
         }
         return result;
     }
 });
 
-ForkRule = Rule.extend({
+ExRule = Rule.extend({
+  init: function(rule){
+      if (rule instanceof Array){
+        this.data = rule.map(function(obj){ return Rule.ruleByObj(obj); });
+      } else {
+        throw "this rule has to have an array of subrules instead of '" + (typeof rule) + "'";
+      }
+  }
+});
+
+CombineRule = ExRule.extend({
+  match: function(input){
+     var result = new Result();
+     for (var i = 0; i < this.data.length; i++){
+       result.add(this.data[i].match(input));
+     }
+     return result;
+  } 
+});
+
+ForkRule = ExRule.extend({
     match: function(input){
      var indexBefore = input.index();
      var lastException = null;
-     for (i = 0; i < this.subRules.length; i++){
+     for (var i = 0; i < this.data.length; i++){
        try {
-         result = this.subRules[i].match(input);
+         result = this.data[i].match(input);
          return result;
        } catch (e){
-         console.info("fork error: " + e.toString() + " - rewind");
-         lastException = e;
-         input.rewind(indexBefore);
+         if (e instanceof ParseException){
+            console.info("fork error: " + e.toString() + " - rewind");
+            lastException = e;
+            input.rewind(indexBefore);
+         } else {
+            throw e;
+         }
        }
      }
      if (lastException === null){
@@ -158,22 +332,13 @@ ForkRule = Rule.extend({
      }
   }
 });
-
-CombineRule = Rule.extend({
-  match: function(input){
-     var result = new Result();
-     for (i = 0; i < this.subRules.length; i++){
-       result.add(this.subRules[i].match(input));
-     }
-     return result;
-  }
-});
   
 function Result(){
   this.matchedStrs = []; 
   
   this.add = function(match){
-    if (match instanceof Result){ this.matchedStrs.push(match.matchedStr);
+    if (match instanceof Result){ 
+        this.matchedStrs = this.matchedStrs.concat(match.matchedStrs);
     } else {
       this.matchedStrs.push(match);
     }
@@ -193,25 +358,37 @@ function Input(string){
   
   this.get = function(){
     if (arguments.length == 1){
+      var i = arguments[0];
+      if (this.chars.length > i && i > 0){
+        return this.chars[i];
+      } else { 
+        return "";
+      }
+    } else {
+      if (index + 1 < this.chars.length){
       index++;
       this.updateLineColumnNumber();
       return this.chars[index - 1];
-    } else {
-      if (this.chars.length > index){
-        return this.chars[index];
-      } else { 
-        return "";
+      } else {
+      return "";
       }
     }
   };
   
-  this.getString = function(length){
+  this.getString = function(start, length){
      var str = "";
-     for (i = index; i < index + length && i < this.chars.length; i++){
+     if (arguments.length == 1){
+        var s = start;
+        start = index;
+        length = s;
+     }
+     for (var i = start; i < index + length && i < this.chars.length; i++){
        str += this.chars[i];
      }
-     index += length;
-     this.updateLineColumnNumber();
+     if (arguments.length == 1){
+        index += length;
+        this.updateLineColumnNumber();
+     }
      return str;
   };
   
@@ -220,7 +397,7 @@ function Input(string){
     this.updateLineColumnNumber();
   };
   
-  this.end = function(){
+  this.finished = function(){
     return this.chars.length <= index;
   };
   
@@ -232,7 +409,7 @@ function Input(string){
     var currentLine = 0;
     var lastLineBreakIndex = 0;
     var len = this.chars.length;
-    for (i = 0; i < index; i++){
+    for (var i = 0; i < index; i++){
       var char = this.chars[i];
       if (char == "\n" && i != len - 1){
         currentLine++;
@@ -249,15 +426,32 @@ function ParseException(got, expected, input){
   this.expected = expected;
   this.line = input.line;
   this.column = input.column;
+  this.char = input.index();
+  this.input = input;
   
   this.toString = function(){
-    return "Parse error: got '" + this.got + "' but expected '" + this.expected + "' in line " + this.line + ", column " + this.column;
+    var str = "got '" + this.got + "' but expected '" + this.expected + "' in line " + this.line + ", column " + this.column;
+    return str + " near " + this.nearStr();
   };
+  
+  this.nearStr = function(){
+    var str = "'";
+    var radius = 5;
+    for (var i = this.char - radius; i < this.char; i++){
+        str += input.get(i);
+    }
+    str += "'<X>'";
+    for (var i = this.char; i < this.char + radius; i++){
+        str += input.get(i);
+    }
+    return str + "'";
+  }
 }
 
 //Usage
 parser = new Parser();
+
 with(parser){
-    start = p("str");
+    start = any(wo("abc"));
 }
-console.log(parser.parse("str") + "");
+console.log(parser.parse("abcdc") + "");
