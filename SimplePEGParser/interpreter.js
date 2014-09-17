@@ -1,3 +1,7 @@
+var PEGParser = require("./pegparser.js")
+var create_parser = PEGParser.parser;
+var tree_helpers = PEGParser.tree_helpers;
+
 /**
  * Implements an interpreter for a simple grammar definition
  * and returns a parser function.
@@ -6,32 +10,37 @@
  * @param grammar grammar definition string
  * @return parser function that represents the grammar
  */
-var Interpreter = (function(){
-	with (require("./pegparser.js").parser()){
-	//  console.log(exec(match_word("3"), "3"));
-	/*	create_rule("a_rule", match_word("3"));
-		create_rule("a_rule2", rule("a_rule"));
-		create_rule("other", match_word("4"));
-	console.log(exec(rule("a_rule"), "b"));
-	console.log(exec(some(rule("a_rule2"), 5, 10), ""));
-	console.log(exec(combine(rule("a_rule"), rule("a_rule2")), "3"));
-		console.log(exec(or(rule("a_rule"), rule("other")), "4"));
-		console.log(exec(not(rule("other")), "4"));	
-		console.log(exec(end(), "4"));
-		*/
+var interpret = (function(){
+	var parser = create_parser();
+	with (parser){
 
-		/* string literal, doesn't support '\'' or "\"" */
-		rule("string", or(
-			and(word('"'), without(word('"')), word('"')),
-			and(word("'"), without(word("'")), word("'"))
+		/* string literal, enclosed by '"' */
+		rule("string", 
+			 and(word('"'), any(or(
+					word('\\"'),
+					word("\\\\"),
+					word("\\t"),
+					word("\\r"),
+					word("\\n"),
+					not(word('"'))
+				)), 
+				word('"')
 			),
 			function (value) {
-				return value.substring(1, value.length - 1); 
+				var str = value.substring(1, value.length - 1);
+				var replacements = { // 1: 2 => replace 1 for 2
+					'\\"': '"', '\\"': '"',	"\\\\": "\\", 
+					"\\r": "\r", "\\n": "\n", "\\t": "\t"
+				}
+				for (var match in replacements){
+					str = str.replace(match, replacements[match]);
+				}
+				return str;
 			}
 		);
 		
 		/* simple number, containing only numeric characters */
-		rule("number", some(char_range("0", "9")), Number);
+		rule("number", or(some(char_range("0", "9")), word("Infinity")), Number);
 		
 		/* range expression, `"[start char]".."[end char]"` */
 		rule("char_range", and(rule("string"), word(".."), rule("string")));
@@ -47,7 +56,13 @@ var Interpreter = (function(){
 		
 		rule("end", word("END"));
 		
-		rule("rule_name", some(or(char_range("a", "z"), char_range("A", "Z"))));
+		rule("rule_name", and(
+			or(char_range("a", "z"), char_range("A", "Z")),
+			any(or(
+				char_range("a", "z"), char_range("A", "Z"),
+				char_range("0", "9"), word("_")
+			))
+		));
 		
 		rule("call_rule", and(word("#"), rule("rule_name")));
 		
@@ -75,12 +90,15 @@ var Interpreter = (function(){
 		
 		rule("any", word("*"));
 		rule("some", word("+"));
-		rule("not", word("~"));
+		rule("not", word("!"));
+		rule("without", word("~"));
 		
 		/* composed term */
 		rule("term", and(ws(), or(
 				and(rule("term_part"), or(
-					rule("any"), rule("some"), rule("not"), rule("times")
+					rule("any"), rule("some"), 
+					rule("not"), rule("times"),
+					rule("without")
 				)),
 				rule("term_part")
 			),
@@ -106,95 +124,127 @@ var Interpreter = (function(){
 				rule("rule_def")
 			), lbrk())		
 		), end()));
-		
-		//TODO write interpreter for grammar definitions
-		
-		var tree_rule_functions = {};
-		
-		/**
-		* Process a program tree.
-		*/
-		tree_rule_functions.program = function(peg_parser, tree_obj){
-			tree_helpers.extend({
-				start_rule_def: [],
-				rule_def: []
-			}, tree_obj);
-			if (start_rule_def.length == 0){
-				throw "No start rule specified.";
-			}
-			
-			// process the start rule definition
-			tree_rule_functions.rule_def(peg_parser, tree_obj.start_rule_def);
-			
-			// process the other rule definition
-			for (i = 0; i < tree_obj.rule_def.length; i++){
-				tree_rule_functions.rule_def(peg_parser, tree_obj.rule_def[i]);
-			}
-			// get the name of the start rule 
-			// and return an application function for this rule
-			return peg_parser.rule(tree_obj.start_rule_def[0].rule_name[0].value);
-		}
-		
-		/**
-		* Process a rule definition tree.
-		*/
-		tree_rule_functions.rule_def = function(peg_parser, tree_obj){
-			var rule_name = tree_obj.rule_name[0].value;
-			if (rule_obj.term === undefined){
-				throw "Rule " + rule_name + " has no associated term.";
-			}
-			peg_parser.rule(rule_name, 
-				tree_rule_functions.term(peg_parser, tree_obj.term[0])
-			);
-		}
-		
-		/**
-		* Process a term tree.
-		*/
-		tree_rule_functions.term = function(peg_parser, tree_obj){
-			/*
-			* "term", and(ws(), or(
-			a nd(*rule("term_part"), or(
-				rule("any"), rule("some"), rule("not"), rule("times")
-				)),
-				rule("term_part")
-				),*/
-		}
-		
-		/**
-		* Process the passed rule tree.
-		* 
-		* Only works with normalized rule objects.
-		* 
-		* @return code
-		*/
-		function process(peg_parser, rule_name, tree_obj){
-			if (tree_rule_functions[rule_name] === undefined){
-				throw "No method for rule " + rule_name;
-			}
-			return tree_rule_functions[rule_name](peg_parser, tree_obj);
-		}
-
-		return function(pegparser, input){
-			process(peg_parser, "program", exec(rule("program"), input))
-		}
-		
-		//console.log(exec(rule("string"), "'augzgha'"));
-		//console.log(exec(rule("number"), "9"));
-		//console.log(exec(rule("char_range"), "9..9").rules.char_range);
-	//	console.log(exec(rule("times"), "{98,  100}").rules.times);
-	//  console.log(JSON.stringify(exec(rule("term"), "( #asdf #sdf){3, 2}"), undefined, 2));
-	// 	console.log(exec(rule("term"), "( #asdf '3'..'3' ( #asdf '3'..'3' ){3, 2} ){3, 2} 'sdf'"));
-	// 	console.log(exec(rule("comment"), " # \ŧ sdf"));
-	// 	console.log(JSON.stringify(exec(rule("ws"), ")"), undefined, 2));
-	// 	console.log(JSON.stringify(exec(rule("term_part"), "(#r #r )"), undefined, 2));
-		//console.log(exec(rule("rule_def"), "ahhs =  (#sdf '9'..'9' (#sdf){4, 5})")); 
-	console.log(((exec(rule("program"), "start abc = (#asdf #adfg (#abc | #a) | #asdf )"))).rules.program);
-	// 	console.log(exec(rule("program"), "asdf = (#dsf #edg (#sdf){4, 4})"));
 	}
+	
+	var tree_helpers = PEGParser.tree_helpers;
+	
+	/**
+	* Process a program tree.
+	*/
+	function program(peg_parser, tree_obj){
+		// process the start rule definition
+		rule_def(peg_parser, tree_obj.start_rule_def);
+		
+		// process the other rule definition
+		for (i = 0; i < tree_obj.rule_def.length; i++){
+			rule_def(peg_parser, tree_obj.rule_def[i]);
+		}
+		// get the name of the start rule 
+		// and return an application function for this rule
+		return peg_parser.rule(tree_obj.start_rule_def.rule_name.value);
+	}
+	
+	/**
+	* Process a rule definition tree.
+	*/
+	function rule_def(peg_parser, tree_obj){
+		//console.log(tree_obj);
+		var rule_name = tree_obj.rule_name.value;
+		if (tree_obj.term === undefined){
+			throw "Rule " + rule_name + " has no associated term.";
+		}
+		peg_parser.rule(rule_name, 
+			term(peg_parser, tree_obj.term)
+		);
+	}
+	
+	/**
+	* Process a term tree.
+	*/
+	function term(peg_parser, tree_obj){
+		var _term_part = term_part(peg_parser, tree_obj.term_part);
+		var possible_apps = ["any", "some", "not", "without"];
+		for (var i = 0; i < possible_apps.length; i++){
+			var app = possible_apps[i];
+			if (tree_helpers.is_leaf(tree_obj[app])){
+				return peg_parser[app](_term_part);
+			}
+		}
+		if (!tree_helpers.is_nil_node(tree_obj.time)){
+			var numbers = tree_obj.times.number;
+			return peg_parser.times_range(_term_part, numbers[0], numbers[1]);
+		}
+		return _term_part;
+	}
+	
+	/**
+	 * Process a term_part tree.
+	 */
+	function term_part(peg_parser, tree_obj){
+// 		console.log(tree_obj);
+		var non_empty = "";
+		for (var node_name in tree_obj){
+			if (!tree_helpers.is_nil_node(tree_obj[node_name])){
+				non_empty = node_name;
+				break;
+			}
+		}
+		var node = tree_obj[non_empty];
+		switch (non_empty){
+			case "fork":
+				return fork(peg_parser, node);
+			case "call_rule":
+				return peg_parser.rule(node.rule_name.value);
+			case "string":
+				return peg_parser.word(node.value);
+			case "end":
+				return peg_parser.end();
+			case "ws":
+				return peg_parser.ws();
+		}
+		return peg_parser.word("");
+	}
+	
+	/**
+	 * Process a fork tree.
+	 */
+	function fork(peg_parser, tree_obj){
+		var child_funcs = [];
+		for (var i = 0; i < tree_obj.combine.length; i++){
+			child_funcs.push(combine(peg_parser, tree_obj.combine[i]));
+		}
+		return peg_parser.or.apply(peg_parser, child_funcs);
+	}
+	
+	/**
+	 * Process a combine tree.
+	 */
+	function combine(peg_parser, tree_obj){
+		var child_funcs = [];
+		for (var i = 0; i < tree_obj.term.length; i++){
+			child_funcs.push(term(peg_parser, tree_obj.term[i]));
+		}
+		return peg_parser.and.apply(peg_parser, child_funcs);
+	}
+
+//         console.log(PEGParser.tree_helpers.stringify(exec(rule("program"), "start a = ( - -)"), 2, true));
+	
+	return function(peg_parser, input){
+		var res = parser.exec(parser.rule("program"), input);
+		if (tree_helpers.has_error(res)){
+			throw tree_helpers.stringify(res);
+		}
+// 		console.log(tree_helpers.stringify(res));
+		return program(peg_parser, res.rules.program);
+	}
+		
 }
 )();
 
 if (module !== undefined){
-	module.exports = Interpreter;
+	module.exports = interpret;
 }
+
+/* Test the interpreter */
+// var parser = create_parser();
+// console.log(tree_helpers.stringify(parser.exec(interpret(parser, "start rule =  (\"a\" END)"), "b")));
